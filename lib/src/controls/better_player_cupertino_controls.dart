@@ -118,6 +118,7 @@ class _BetterPlayerCupertinoControlsState
   }
 
   /// Builds the specific hit areas for Double Tap Seek and Tap Play/Pause
+  /// Builds the specific hit areas for Double Tap Seek and Tap Play/Pause
   Widget _buildHitArea() {
     // 1. LOCKED STATE: Only tap to show controls (so user can unlock)
     if (_isLocked) {
@@ -139,11 +140,11 @@ class _BetterPlayerCupertinoControlsState
       );
     }
 
-    // 2. UNLOCKED STATE: Split into 3 zones
+    // 2. UNLOCKED STATE: Split into 3 zones with Visible Icons
     return Expanded(
       child: Row(
         children: [
-          // LEFT ZONE (Seek Backward + Play/Pause)
+          // --- LEFT ZONE (Seek Backward) ---
           Expanded(
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
@@ -152,20 +153,31 @@ class _BetterPlayerCupertinoControlsState
                 skipBack();
                 cancelAndRestartTimer();
               },
-              child: Container(color: Colors.transparent),
+              child: Container(
+                color: Colors.transparent,
+                alignment: Alignment.center,
+                child: _buildHitAreaControl(
+                  icon: _controlsConfiguration.skipBackIcon,
+                  onPressed: skipBack,
+                ),
+              ),
             ),
           ),
 
-          // CENTER ZONE (Play/Pause only)
+          // --- CENTER ZONE (Play/Pause) ---
           Expanded(
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: _onPlayPause,
-              child: Container(color: Colors.transparent),
+              child: Container(
+                color: Colors.transparent,
+                alignment: Alignment.center,
+                child: _buildCenterPlayButton(),
+              ),
             ),
           ),
 
-          // RIGHT ZONE (Seek Forward + Play/Pause)
+          // --- RIGHT ZONE (Seek Forward) ---
           Expanded(
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
@@ -174,10 +186,63 @@ class _BetterPlayerCupertinoControlsState
                 skipForward();
                 cancelAndRestartTimer();
               },
-              child: Container(color: Colors.transparent),
+              child: Container(
+                color: Colors.transparent,
+                alignment: Alignment.center,
+                child: _buildHitAreaControl(
+                  icon: _controlsConfiguration.skipForwardIcon,
+                  onPressed: skipForward,
+                ),
+              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Helper to build the visual icon for Forward/Back
+  Widget _buildHitAreaControl({
+    required IconData icon,
+    required VoidCallback onPressed,
+  }) {
+    return AnimatedOpacity(
+      opacity: controlsNotVisible ? 0.0 : 1.0,
+      duration: _controlsConfiguration.controlsHideTime,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.5),
+          shape: BoxShape.circle,
+        ),
+        child: IconButton(
+          icon: Icon(icon, color: Colors.white, size: 32),
+          onPressed: () {
+            onPressed();
+            cancelAndRestartTimer();
+          },
+        ),
+      ),
+    );
+  }
+
+  /// Helper to build the visual icon for Play/Pause in the center
+  Widget _buildCenterPlayButton() {
+    return AnimatedOpacity(
+      opacity: controlsNotVisible ? 0.0 : 1.0,
+      duration: _controlsConfiguration.controlsHideTime,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.5),
+          shape: BoxShape.circle,
+        ),
+        padding: const EdgeInsets.all(12),
+        child: Icon(
+          _controller!.value.isPlaying
+              ? _controlsConfiguration.pauseIcon
+              : _controlsConfiguration.playIcon,
+          color: Colors.white,
+          size: 52,
+        ),
       ),
     );
   }
