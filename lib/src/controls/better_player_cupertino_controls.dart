@@ -39,6 +39,9 @@ class _BetterPlayerCupertinoControlsState
   Timer? _initTimer;
   bool _wasLoading = false;
 
+  // --- 1. ADDED LOCK STATE VARIABLE ---
+  bool _isLocked = false;
+
   VideoPlayerController? _controller;
   BetterPlayerController? _betterPlayerController;
   StreamSubscription? _controlsVisibilityStreamSubscription;
@@ -95,7 +98,9 @@ class _BetterPlayerCupertinoControlsState
         Expanded(child: Center(child: _buildLoadingWidget()))
       else
         _buildHitArea(),
-      _buildNextVideoWidget(),
+
+      if (!_isLocked) _buildNextVideoWidget() else const SizedBox(),
+
       _buildBottomBar(
         backgroundColor,
         iconColor,
@@ -116,7 +121,10 @@ class _BetterPlayerCupertinoControlsState
           BetterPlayerMultipleGestureDetector.of(context)!.onDoubleTap?.call();
         }
         cancelAndRestartTimer();
-        _onPlayPause();
+        // --- 3. DISABLE DOUBLE TAP IF LOCKED ---
+        if (!_isLocked) {
+          _onPlayPause();
+        }
       },
       onLongPress: () {
         if (BetterPlayerMultipleGestureDetector.of(context) != null) {
@@ -158,6 +166,47 @@ class _BetterPlayerCupertinoControlsState
     super.didChangeDependencies();
   }
 
+  // --- 4. NEW LOCK BUTTON BUILDER ---
+  GestureDetector _buildLockButton(
+    Color backgroundColor,
+    Color iconColor,
+    double barHeight,
+    double iconSize,
+    double buttonPadding,
+  ) {
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _isLocked = !_isLocked;
+        });
+        cancelAndRestartTimer();
+      },
+      child: AnimatedOpacity(
+        opacity: controlsNotVisible ? 0.0 : 1.0,
+        duration: _controlsConfiguration.controlsHideTime,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            height: barHeight,
+            padding: EdgeInsets.symmetric(
+              horizontal: buttonPadding,
+            ),
+            decoration: BoxDecoration(color: backgroundColor),
+            child: Center(
+              child: Icon(
+                _isLocked
+                    ? CupertinoIcons.lock_fill
+                    : CupertinoIcons.lock_open_fill,
+                color: iconColor,
+                size: iconSize,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   GestureDetector _buildBackButton(
     Color backgroundColor,
     Color iconColor,
@@ -168,6 +217,8 @@ class _BetterPlayerCupertinoControlsState
     return GestureDetector(
       onTap: () {
         if (_betterPlayerController!.isFullScreen) {
+          _betterPlayerController!.toggleFullScreen();
+          // Added safe pop for fullscreen exit just in case
           Navigator.of(context).pop();
         } else {
           if (Navigator.of(context).canPop()) {
@@ -207,6 +258,11 @@ class _BetterPlayerCupertinoControlsState
     if (!betterPlayerController!.controlsEnabled) {
       return const SizedBox();
     }
+
+    if (_isLocked) {
+      return const SizedBox();
+    }
+
     return AnimatedOpacity(
       opacity: controlsNotVisible ? 0.0 : 1.0,
       duration: _controlsConfiguration.controlsHideTime,
@@ -268,6 +324,7 @@ class _BetterPlayerCupertinoControlsState
     );
   }
 
+  // ... [Keep _buildLiveWidget and _buildExpandButton as they were] ...
   Widget _buildLiveWidget() {
     return Expanded(
       child: Text(
@@ -317,19 +374,29 @@ class _BetterPlayerCupertinoControlsState
   Expanded _buildHitArea() {
     return Expanded(
       child: GestureDetector(
-        onTap: _latestValue != null && _latestValue!.isPlaying
-            ? () {
-                if (controlsNotVisible == true) {
-                  cancelAndRestartTimer();
-                } else {
-                  _hideTimer?.cancel();
-                  changePlayerControlsNotVisible(true);
-                }
-              }
-            : () {
-                _hideTimer?.cancel();
-                changePlayerControlsNotVisible(false);
-              },
+        onTap: () {
+          if (_isLocked) {
+            if (controlsNotVisible == true) {
+              cancelAndRestartTimer();
+            } else {
+              _hideTimer?.cancel();
+              changePlayerControlsNotVisible(true);
+            }
+            return;
+          }
+
+          if (_latestValue != null && _latestValue!.isPlaying) {
+            if (controlsNotVisible == true) {
+              cancelAndRestartTimer();
+            } else {
+              _hideTimer?.cancel();
+              changePlayerControlsNotVisible(true);
+            }
+          } else {
+            _hideTimer?.cancel();
+            changePlayerControlsNotVisible(false);
+          }
+        },
         child: Container(
           color: Colors.transparent,
         ),
@@ -337,6 +404,7 @@ class _BetterPlayerCupertinoControlsState
     );
   }
 
+  // ... [Keep _buildMoreButton, _buildMuteButton, _buildPlayPause, etc.] ...
   GestureDetector _buildMoreButton(
     VideoPlayerController? controller,
     Color backgroundColor,
@@ -522,6 +590,29 @@ class _BetterPlayerCupertinoControlsState
     }
     final barHeight = topBarHeight * 0.8;
     final iconSize = topBarHeight * 0.4;
+
+    if (_isLocked) {
+      return Container(
+          height: barHeight,
+          margin: EdgeInsets.only(
+            top: marginSize,
+            right: marginSize,
+            left: marginSize,
+          ),
+          child: Row(
+              mainAxisAlignment: MainAxisAlignment.end, // Align to right
+              children: [
+                _buildLockButton(
+                  backgroundColor,
+                  iconColor,
+                  barHeight,
+                  iconSize,
+                  buttonPadding,
+                ),
+              ]));
+    }
+
+    // Normal Unlocked Top Bar
     return Container(
       height: barHeight,
       margin: EdgeInsets.only(
@@ -531,7 +622,6 @@ class _BetterPlayerCupertinoControlsState
       ),
       child: Row(
         children: <Widget>[
-          // --- NEW BACK BUTTON ADDED HERE ---
           _buildBackButton(
             backgroundColor,
             iconColor,
@@ -542,7 +632,6 @@ class _BetterPlayerCupertinoControlsState
           const SizedBox(
             width: 4,
           ),
-          // ----------------------------------
           if (_controlsConfiguration.enableFullscreen)
             _buildExpandButton(
               backgroundColor,
@@ -566,7 +655,20 @@ class _BetterPlayerCupertinoControlsState
             )
           else
             const SizedBox(),
+
           const Spacer(),
+
+          _buildLockButton(
+            backgroundColor,
+            iconColor,
+            barHeight,
+            iconSize,
+            buttonPadding,
+          ),
+          const SizedBox(
+            width: 4,
+          ),
+
           if (_controlsConfiguration.enableMute)
             _buildMuteButton(
               _controller,
