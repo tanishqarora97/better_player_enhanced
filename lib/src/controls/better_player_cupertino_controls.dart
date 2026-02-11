@@ -85,22 +85,39 @@ class _BetterPlayerCupertinoControlsState
     final isFullScreen = _betterPlayerController?.isFullScreen == true;
 
     _wasLoading = isLoading(_latestValue);
+
     final controlsColumn = Column(children: <Widget>[
-      _buildTopBar(
-        backgroundColor,
-        iconColor,
-        barHeight,
-        buttonPadding,
+      // Wrap Top Bar in IgnorePointer so it can't be clicked when hidden
+      IgnorePointer(
+        ignoring: controlsNotVisible,
+        child: _buildTopBar(
+          backgroundColor,
+          iconColor,
+          barHeight,
+          buttonPadding,
+        ),
       ),
+
       if (_wasLoading)
         Expanded(child: Center(child: _buildLoadingWidget()))
       else
-        _buildHitArea(),
-      if (!_isLocked) _buildNextVideoWidget() else const SizedBox(),
-      _buildBottomBar(
-        backgroundColor,
-        iconColor,
-        barHeight,
+        _buildHitArea(), // Hit Area is NEVER ignored, so it can catch taps to show controls
+
+      if (!_isLocked)
+        IgnorePointer(
+          ignoring: controlsNotVisible,
+          child: _buildNextVideoWidget(),
+        )
+      else
+        const SizedBox(),
+
+      IgnorePointer(
+        ignoring: controlsNotVisible,
+        child: _buildBottomBar(
+          backgroundColor,
+          iconColor,
+          barHeight,
+        ),
       ),
     ]);
 
@@ -110,17 +127,13 @@ class _BetterPlayerCupertinoControlsState
           BetterPlayerMultipleGestureDetector.of(context)!.onLongPress?.call();
         }
       },
-      child: AbsorbPointer(
-          absorbing: controlsNotVisible,
-          child:
-              isFullScreen ? SafeArea(child: controlsColumn) : controlsColumn),
+      child: isFullScreen ? SafeArea(child: controlsColumn) : controlsColumn,
     );
   }
 
   /// Builds the specific hit areas for Double Tap Seek and Tap Play/Pause
-  /// Builds the specific hit areas for Double Tap Seek and Tap Play/Pause
   Widget _buildHitArea() {
-    // 1. LOCKED STATE: Only tap to show controls (so user can unlock)
+    // 1. LOCKED STATE
     if (_isLocked) {
       return Expanded(
         child: GestureDetector(
@@ -140,15 +153,15 @@ class _BetterPlayerCupertinoControlsState
       );
     }
 
-    // 2. UNLOCKED STATE: Split into 3 zones with Visible Icons
+    // 2. UNLOCKED STATE
     return Expanded(
       child: Row(
         children: [
-          // --- LEFT ZONE (Seek Backward) ---
+          // LEFT ZONE (Seek Backward)
           Expanded(
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: _onPlayPause,
+              onTap: _onTapHitArea,
               onDoubleTap: () {
                 skipBack();
                 cancelAndRestartTimer();
@@ -164,11 +177,11 @@ class _BetterPlayerCupertinoControlsState
             ),
           ),
 
-          // --- CENTER ZONE (Play/Pause) ---
+          // CENTER ZONE (Play/Pause)
           Expanded(
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: _onPlayPause,
+              onTap: _onTapHitArea,
               child: Container(
                 color: Colors.transparent,
                 alignment: Alignment.center,
@@ -177,11 +190,11 @@ class _BetterPlayerCupertinoControlsState
             ),
           ),
 
-          // --- RIGHT ZONE (Seek Forward) ---
+          // RIGHT ZONE (Seek Forward)
           Expanded(
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: _onPlayPause,
+              onTap: _onTapHitArea,
               onDoubleTap: () {
                 skipForward();
                 cancelAndRestartTimer();
@@ -201,7 +214,15 @@ class _BetterPlayerCupertinoControlsState
     );
   }
 
-  /// Helper to build the visual icon for Forward/Back
+  // New method to handle logic: Show controls if hidden, Toggle play if visible
+  void _onTapHitArea() {
+    if (controlsNotVisible) {
+      cancelAndRestartTimer(); // Just show controls
+    } else {
+      _onPlayPause(); // Toggle play/pause
+    }
+  }
+
   Widget _buildHitAreaControl({
     required IconData icon,
     required VoidCallback onPressed,
@@ -225,7 +246,6 @@ class _BetterPlayerCupertinoControlsState
     );
   }
 
-  /// Helper to build the visual icon for Play/Pause in the center
   Widget _buildCenterPlayButton() {
     return AnimatedOpacity(
       opacity: controlsNotVisible ? 0.0 : 1.0,
@@ -366,7 +386,6 @@ class _BetterPlayerCupertinoControlsState
       return const SizedBox();
     }
 
-    // Hide bottom bar if locked
     if (_isLocked) {
       return const SizedBox();
     }
@@ -666,15 +685,13 @@ class _BetterPlayerCupertinoControlsState
 
     if (_isLocked) {
       return Container(
-        height: barHeight,
-        margin: EdgeInsets.only(
-          top: marginSize,
-          right: marginSize,
-          left: marginSize,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
+          height: barHeight,
+          margin: EdgeInsets.only(
+            top: marginSize,
+            right: marginSize,
+            left: marginSize,
+          ),
+          child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
             _buildLockButton(
               backgroundColor,
               iconColor,
@@ -682,9 +699,7 @@ class _BetterPlayerCupertinoControlsState
               iconSize,
               buttonPadding,
             ),
-          ],
-        ),
-      );
+          ]));
     }
 
     return Container(
