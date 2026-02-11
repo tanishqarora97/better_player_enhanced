@@ -158,6 +158,47 @@ class _BetterPlayerCupertinoControlsState
     super.didChangeDependencies();
   }
 
+  GestureDetector _buildBackButton(
+    Color backgroundColor,
+    Color iconColor,
+    double barHeight,
+    double iconSize,
+    double buttonPadding,
+  ) {
+    return GestureDetector(
+      onTap: () {
+        if (_betterPlayerController!.isFullScreen) {
+          Navigator.of(context).pop();
+        } else {
+          if (Navigator.of(context).canPop()) {
+            Navigator.of(context).pop();
+          }
+        }
+      },
+      child: AnimatedOpacity(
+        opacity: controlsNotVisible ? 0.0 : 1.0,
+        duration: _controlsConfiguration.controlsHideTime,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            height: barHeight,
+            padding: EdgeInsets.symmetric(
+              horizontal: buttonPadding,
+            ),
+            decoration: BoxDecoration(color: backgroundColor),
+            child: Center(
+              child: Icon(
+                CupertinoIcons.back,
+                color: iconColor,
+                size: iconSize,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildBottomBar(
     Color backgroundColor,
     Color iconColor,
@@ -490,6 +531,18 @@ class _BetterPlayerCupertinoControlsState
       ),
       child: Row(
         children: <Widget>[
+          // --- NEW BACK BUTTON ADDED HERE ---
+          _buildBackButton(
+            backgroundColor,
+            iconColor,
+            barHeight,
+            iconSize,
+            buttonPadding,
+          ),
+          const SizedBox(
+            width: 4,
+          ),
+          // ----------------------------------
           if (_controlsConfiguration.enableFullscreen)
             _buildExpandButton(
               backgroundColor,
