@@ -38,8 +38,6 @@ class _BetterPlayerCupertinoControlsState
   Timer? _expandCollapseTimer;
   Timer? _initTimer;
   bool _wasLoading = false;
-
-  // --- 1. ADDED LOCK STATE VARIABLE ---
   bool _isLocked = false;
 
   VideoPlayerController? _controller;
@@ -98,34 +96,15 @@ class _BetterPlayerCupertinoControlsState
         Expanded(child: Center(child: _buildLoadingWidget()))
       else
         _buildHitArea(),
-
       if (!_isLocked) _buildNextVideoWidget() else const SizedBox(),
-
       _buildBottomBar(
         backgroundColor,
         iconColor,
         barHeight,
       ),
     ]);
+
     return GestureDetector(
-      onTap: () {
-        if (BetterPlayerMultipleGestureDetector.of(context) != null) {
-          BetterPlayerMultipleGestureDetector.of(context)!.onTap?.call();
-        }
-        controlsNotVisible
-            ? cancelAndRestartTimer()
-            : changePlayerControlsNotVisible(true);
-      },
-      onDoubleTap: () {
-        if (BetterPlayerMultipleGestureDetector.of(context) != null) {
-          BetterPlayerMultipleGestureDetector.of(context)!.onDoubleTap?.call();
-        }
-        cancelAndRestartTimer();
-        // --- 3. DISABLE DOUBLE TAP IF LOCKED ---
-        if (!_isLocked) {
-          _onPlayPause();
-        }
-      },
       onLongPress: () {
         if (BetterPlayerMultipleGestureDetector.of(context) != null) {
           BetterPlayerMultipleGestureDetector.of(context)!.onLongPress?.call();
@@ -135,6 +114,71 @@ class _BetterPlayerCupertinoControlsState
           absorbing: controlsNotVisible,
           child:
               isFullScreen ? SafeArea(child: controlsColumn) : controlsColumn),
+    );
+  }
+
+  /// Builds the specific hit areas for Double Tap Seek and Tap Play/Pause
+  Widget _buildHitArea() {
+    // 1. LOCKED STATE: Only tap to show controls (so user can unlock)
+    if (_isLocked) {
+      return Expanded(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            if (controlsNotVisible == true) {
+              cancelAndRestartTimer();
+            } else {
+              _hideTimer?.cancel();
+              changePlayerControlsNotVisible(true);
+            }
+          },
+          child: Container(
+            color: Colors.transparent,
+          ),
+        ),
+      );
+    }
+
+    // 2. UNLOCKED STATE: Split into 3 zones
+    return Expanded(
+      child: Row(
+        children: [
+          // LEFT ZONE (Seek Backward + Play/Pause)
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _onPlayPause,
+              onDoubleTap: () {
+                skipBack();
+                cancelAndRestartTimer();
+              },
+              child: Container(color: Colors.transparent),
+            ),
+          ),
+
+          // CENTER ZONE (Play/Pause only)
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _onPlayPause,
+              child: Container(color: Colors.transparent),
+            ),
+          ),
+
+          // RIGHT ZONE (Seek Forward + Play/Pause)
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _onPlayPause,
+              onDoubleTap: () {
+                skipForward();
+                cancelAndRestartTimer();
+              },
+              child: Container(color: Colors.transparent),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -166,7 +210,48 @@ class _BetterPlayerCupertinoControlsState
     super.didChangeDependencies();
   }
 
-  // --- 4. NEW LOCK BUTTON BUILDER ---
+  GestureDetector _buildBackButton(
+    Color backgroundColor,
+    Color iconColor,
+    double barHeight,
+    double iconSize,
+    double buttonPadding,
+  ) {
+    return GestureDetector(
+      onTap: () {
+        if (_betterPlayerController!.isFullScreen) {
+          _betterPlayerController!.toggleFullScreen();
+          Navigator.of(context).pop();
+        } else {
+          if (Navigator.of(context).canPop()) {
+            Navigator.of(context).pop();
+          }
+        }
+      },
+      child: AnimatedOpacity(
+        opacity: controlsNotVisible ? 0.0 : 1.0,
+        duration: _controlsConfiguration.controlsHideTime,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            height: barHeight,
+            padding: EdgeInsets.symmetric(
+              horizontal: buttonPadding,
+            ),
+            decoration: BoxDecoration(color: backgroundColor),
+            child: Center(
+              child: Icon(
+                CupertinoIcons.back,
+                color: iconColor,
+                size: iconSize,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   GestureDetector _buildLockButton(
     Color backgroundColor,
     Color iconColor,
@@ -207,49 +292,6 @@ class _BetterPlayerCupertinoControlsState
     );
   }
 
-  GestureDetector _buildBackButton(
-    Color backgroundColor,
-    Color iconColor,
-    double barHeight,
-    double iconSize,
-    double buttonPadding,
-  ) {
-    return GestureDetector(
-      onTap: () {
-        if (_betterPlayerController!.isFullScreen) {
-          _betterPlayerController!.toggleFullScreen();
-          // Added safe pop for fullscreen exit just in case
-          Navigator.of(context).pop();
-        } else {
-          if (Navigator.of(context).canPop()) {
-            Navigator.of(context).pop();
-          }
-        }
-      },
-      child: AnimatedOpacity(
-        opacity: controlsNotVisible ? 0.0 : 1.0,
-        duration: _controlsConfiguration.controlsHideTime,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: Container(
-            height: barHeight,
-            padding: EdgeInsets.symmetric(
-              horizontal: buttonPadding,
-            ),
-            decoration: BoxDecoration(color: backgroundColor),
-            child: Center(
-              child: Icon(
-                CupertinoIcons.back,
-                color: iconColor,
-                size: iconSize,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildBottomBar(
     Color backgroundColor,
     Color iconColor,
@@ -259,6 +301,7 @@ class _BetterPlayerCupertinoControlsState
       return const SizedBox();
     }
 
+    // Hide bottom bar if locked
     if (_isLocked) {
       return const SizedBox();
     }
@@ -324,7 +367,6 @@ class _BetterPlayerCupertinoControlsState
     );
   }
 
-  // ... [Keep _buildLiveWidget and _buildExpandButton as they were] ...
   Widget _buildLiveWidget() {
     return Expanded(
       child: Text(
@@ -371,40 +413,6 @@ class _BetterPlayerCupertinoControlsState
     );
   }
 
-  Expanded _buildHitArea() {
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          if (_isLocked) {
-            if (controlsNotVisible == true) {
-              cancelAndRestartTimer();
-            } else {
-              _hideTimer?.cancel();
-              changePlayerControlsNotVisible(true);
-            }
-            return;
-          }
-
-          if (_latestValue != null && _latestValue!.isPlaying) {
-            if (controlsNotVisible == true) {
-              cancelAndRestartTimer();
-            } else {
-              _hideTimer?.cancel();
-              changePlayerControlsNotVisible(true);
-            }
-          } else {
-            _hideTimer?.cancel();
-            changePlayerControlsNotVisible(false);
-          }
-        },
-        child: Container(
-          color: Colors.transparent,
-        ),
-      ),
-    );
-  }
-
-  // ... [Keep _buildMoreButton, _buildMuteButton, _buildPlayPause, etc.] ...
   GestureDetector _buildMoreButton(
     VideoPlayerController? controller,
     Color backgroundColor,
@@ -593,26 +601,27 @@ class _BetterPlayerCupertinoControlsState
 
     if (_isLocked) {
       return Container(
-          height: barHeight,
-          margin: EdgeInsets.only(
-            top: marginSize,
-            right: marginSize,
-            left: marginSize,
-          ),
-          child: Row(
-              mainAxisAlignment: MainAxisAlignment.end, // Align to right
-              children: [
-                _buildLockButton(
-                  backgroundColor,
-                  iconColor,
-                  barHeight,
-                  iconSize,
-                  buttonPadding,
-                ),
-              ]));
+        height: barHeight,
+        margin: EdgeInsets.only(
+          top: marginSize,
+          right: marginSize,
+          left: marginSize,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            _buildLockButton(
+              backgroundColor,
+              iconColor,
+              barHeight,
+              iconSize,
+              buttonPadding,
+            ),
+          ],
+        ),
+      );
     }
 
-    // Normal Unlocked Top Bar
     return Container(
       height: barHeight,
       margin: EdgeInsets.only(
@@ -655,9 +664,7 @@ class _BetterPlayerCupertinoControlsState
             )
           else
             const SizedBox(),
-
           const Spacer(),
-
           _buildLockButton(
             backgroundColor,
             iconColor,
@@ -668,7 +675,6 @@ class _BetterPlayerCupertinoControlsState
           const SizedBox(
             width: 4,
           ),
-
           if (_controlsConfiguration.enableMute)
             _buildMuteButton(
               _controller,
